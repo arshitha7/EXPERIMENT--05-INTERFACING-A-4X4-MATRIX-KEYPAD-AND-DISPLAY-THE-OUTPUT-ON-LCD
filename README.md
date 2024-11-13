@@ -1,6 +1,4 @@
 # EXPERIMENT--05-INTERFACING-A-4X4-MATRIX-KEYPAD-AND-DISPLAY-THE-OUTPUT-ON-LCD
-### Name :Arshitha MS
-### Register Number : 212223240015
 
 ## Aim: 
 To Interface a 4X4 matrix keypad and show the output on 16X2 LCD display to ARM controller , and simulate it in Proteus
@@ -180,31 +178,16 @@ https://engineeringxpert.com/wp-content/uploads/2022/04/26.png
 ![image](https://user-images.githubusercontent.com/36288975/233856904-99eb708a-c907-4595-9025-c9dbd89b8879.png)
 
 ## CIRCUIT DIAGRAM 
- ![Screenshot 2024-10-10 114153](https://github.com/user-attachments/assets/16406705-9e15-4b0a-b5d5-7a3bb576a804)
+![image](https://github.com/user-attachments/assets/9097274d-d09a-4f0a-829f-c23f4ee8a1b5)
+
 
 ## STM 32 CUBE PROGRAM :
-
-## Main.c
 ```
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+NAME:Arshitha MS
+REG NO:212223240015
+```
+main.c
+```
 #include "main.h"
 #include <stdbool.h>
 #include "lcd.h"
@@ -224,7 +207,6 @@ void key();
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -256,7 +238,6 @@ static void MX_GPIO_Init(void);
   */
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -287,10 +268,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    /* USER CODE END WHILE */
 	  key();
 	  HAL_Delay(500);
-    /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -440,157 +420,275 @@ void key()
 						HAL_Delay(500);
 
 }
+```
+lcd.h
+```
+#ifndef LCD_H_
+#define LCD_H_
+
+#include "stm32f4xx_hal.h"
+#include "string.h"
+#include "stdio.h"
+#include "main.h"
+
+// #define LCD20xN 		// For 20xN LCDs
+#define LCD16xN			// For 16xN LCDs
+
+// For row start addresses
+extern const uint8_t ROW_16[];
+extern const uint8_t ROW_20[];
+
+/************* Command register *************/
+#define CLEAR_DISPLAY 0x01
+
+#define RETURN_HOME 0x02
+
+#define ENTRY_MODE_SET 0x04
+#define OPT_S	0x01					// Shift entire display to right
+#define OPT_INC 0x02					// Cursor increment
+
+#define DISPLAY_ON_OFF_CONTROL 0x08
+#define OPT_D	0x04					// Turn on display
+#define OPT_C	0x02					// Turn on cursor
+#define OPT_B 	0x01					// Turn on cursor blink
+
+#define CURSOR_DISPLAY_SHIFT 0x10		// Move and shift cursor
+#define OPT_SC 0x08
+#define OPT_RL 0x04
+
+#define FUNCTION_SET 0x20
+#define OPT_DL 0x10						// Set interface data length
+#define OPT_N 0x08						// Set number of display lines
+#define OPT_F 0x04						// Set alternate font
+#define SETCGRAM_ADDR 0x040
+#define SET_DDRAM_ADDR 0x80				// Set DDRAM address
+
+
+/************* Helper macros *************/
+#define DELAY(X) HAL_Delay(X)
+
+
+/************* LCD defines *************/
+#define LCD_NIB 4
+#define LCD_BYTE 8
+#define LCD_DATA_REG 1
+#define LCD_COMMAND_REG 0
+
+
+/************* LCD typedefs *************/
+#define Lcd_PortType GPIO_TypeDef*
+#define Lcd_PinType uint16_t
+
+typedef enum {
+	LCD_4_BIT_MODE,
+	LCD_8_BIT_MODE
+} Lcd_ModeTypeDef;
+
+
+typedef struct {
+	Lcd_PortType * data_port;
+	Lcd_PinType * data_pin;
+
+	Lcd_PortType rs_port;
+	Lcd_PinType rs_pin;
+
+	Lcd_PortType en_port;
+	Lcd_PinType en_pin;
+
+	Lcd_ModeTypeDef mode;
+
+} Lcd_HandleTypeDef;
+
+
+/************* Public functions *************/
+void Lcd_init(Lcd_HandleTypeDef * lcd);
+void Lcd_int(Lcd_HandleTypeDef * lcd, int number);
+void Lcd_string(Lcd_HandleTypeDef * lcd, char * string);
+void Lcd_cursor(Lcd_HandleTypeDef * lcd, uint8_t row, uint8_t col);
+Lcd_HandleTypeDef Lcd_create(
+		Lcd_PortType port[], Lcd_PinType pin[],
+		Lcd_PortType rs_port, Lcd_PinType rs_pin,
+		Lcd_PortType en_port, Lcd_PinType en_pin, Lcd_ModeTypeDef mode);
+void Lcd_define_char(Lcd_HandleTypeDef * lcd, uint8_t code, uint8_t bitmap[]);
+void Lcd_clear(Lcd_HandleTypeDef * lcd);
+
+#endif /* LCD_H_ */
+
+```
+lcd.c
+```
+#include "lcd.h"
+const uint8_t ROW_16[] = {0x00, 0x40, 0x10, 0x50};
+const uint8_t ROW_20[] = {0x00, 0x40, 0x14, 0x54};
+/************* Static declarations *************/
+
+static void lcd_write_data(Lcd_HandleTypeDef * lcd, uint8_t data);
+static void lcd_write_command(Lcd_HandleTypeDef * lcd, uint8_t command);
+static void lcd_write(Lcd_HandleTypeDef * lcd, uint8_t data, uint8_t len);
+
+
+/************* Function definitions *************/
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
+ * Create new Lcd_HandleTypeDef and initialize the Lcd
+ */
+Lcd_HandleTypeDef Lcd_create(
+		Lcd_PortType port[], Lcd_PinType pin[],
+		Lcd_PortType rs_port, Lcd_PinType rs_pin,
+		Lcd_PortType en_port, Lcd_PinType en_pin, Lcd_ModeTypeDef mode)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	Lcd_HandleTypeDef lcd;
 
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE2);
+	lcd.mode = mode;
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	lcd.en_pin = en_pin;
+	lcd.en_port = en_port;
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	lcd.rs_pin = rs_pin;
+	lcd.rs_port = rs_port;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    Error_Handler();
-  }
+	lcd.data_pin = pin;
+	lcd.data_port = port;
+
+	Lcd_init(&lcd);
+
+	return lcd;
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
+ * Initialize 16x2-lcd without cursor
+ */
+void Lcd_init(Lcd_HandleTypeDef * lcd)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+	if(lcd->mode == LCD_4_BIT_MODE)
+	{
+			lcd_write_command(lcd, 0x33);
+			lcd_write_command(lcd, 0x32);
+			lcd_write_command(lcd, FUNCTION_SET | OPT_N);				// 4-bit mode
+	}
+	else
+		lcd_write_command(lcd, FUNCTION_SET | OPT_DL | OPT_N);
 
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PC0 PC1 PC2 PC3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PA0 PA1 PA2 PA3 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PC4 PC5 PC6 PC7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB0 PB1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+	lcd_write_command(lcd, CLEAR_DISPLAY);						// Clear screen
+	lcd_write_command(lcd, DISPLAY_ON_OFF_CONTROL | OPT_D);		// Lcd-on, cursor-off, no-blink
+	lcd_write_command(lcd, ENTRY_MODE_SET | OPT_INC);			// Increment cursor
 }
-
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
+ * Write a number on the current position
+ */
+void Lcd_int(Lcd_HandleTypeDef * lcd, int number)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+	char buffer[11];
+	sprintf(buffer, "%d", number);
+
+	Lcd_string(lcd, buffer);
 }
 
-#ifdef  USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
+ * Write a string on the current position
+ */
+void Lcd_string(Lcd_HandleTypeDef * lcd, char * string)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+	for(uint8_t i = 0; i < strlen(string); i++)
+	{
+		lcd_write_data(lcd, string[i]);
+	}
 }
-#endif /* USE_FULL_ASSERT */
+
+/**
+ * Set the cursor position
+ */
+void Lcd_cursor(Lcd_HandleTypeDef * lcd, uint8_t row, uint8_t col)
+{
+	#ifdef LCD20xN
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_20[row] + col);
+	#endif
+
+	#ifdef LCD16xN
+	lcd_write_command(lcd, SET_DDRAM_ADDR + ROW_16[row] + col);
+	#endif
+}
+
+/**
+ * Clear the screen
+ */
+void Lcd_clear(Lcd_HandleTypeDef * lcd) {
+	lcd_write_command(lcd, CLEAR_DISPLAY);
+}
+
+void Lcd_define_char(Lcd_HandleTypeDef * lcd, uint8_t code, uint8_t bitmap[]){
+	lcd_write_command(lcd, SETCGRAM_ADDR + (code << 3));
+	for(uint8_t i=0;i<8;++i){
+		lcd_write_data(lcd, bitmap[i]);
+	}
+
+}
+
+
+/************* Static function definition *************/
+
+/**
+ * Write a byte to the command register
+ */
+void lcd_write_command(Lcd_HandleTypeDef * lcd, uint8_t command)
+{
+	HAL_GPIO_WritePin(lcd->rs_port, lcd->rs_pin, LCD_COMMAND_REG);		// Write to command register
+
+	if(lcd->mode == LCD_4_BIT_MODE)
+	{
+		lcd_write(lcd, (command >> 4), LCD_NIB);
+		lcd_write(lcd, command & 0x0F, LCD_NIB);
+	}
+	else
+	{
+		lcd_write(lcd, command, LCD_BYTE);
+	}
+
+}
+
+/**
+ * Write a byte to the data register
+ */
+void lcd_write_data(Lcd_HandleTypeDef * lcd, uint8_t data)
+{
+	HAL_GPIO_WritePin(lcd->rs_port, lcd->rs_pin, LCD_DATA_REG);			// Write to data register
+
+	if(lcd->mode == LCD_4_BIT_MODE)
+	{
+		lcd_write(lcd, data >> 4, LCD_NIB);
+		lcd_write(lcd, data & 0x0F, LCD_NIB);
+	}
+	else
+	{
+		lcd_write(lcd, data, LCD_BYTE);
+	}
+
+}
+
+/**
+ * Set len bits on the bus and toggle the enable line
+ */
+void lcd_write(Lcd_HandleTypeDef * lcd, uint8_t data, uint8_t len)
+{
+	for(uint8_t i = 0; i < len; i++)
+	{
+		HAL_GPIO_WritePin(lcd->data_port[i], lcd->data_pin[i], (data >> i) & 0x01);
+	}
+
+	HAL_GPIO_WritePin(lcd->en_port, lcd->en_pin, 1);
+	DELAY(1);
+	HAL_GPIO_WritePin(lcd->en_port, lcd->en_pin, 0);
+}
+
 ```
 ## Output screen shots of proteus  :
-
-![image](https://github.com/user-attachments/assets/fa59ea98-bf65-4c24-a30e-1749bf140f46)
-![image](https://github.com/user-attachments/assets/1dddea71-ff4b-4d68-95d4-c1c22db8bd06)
-![Screenshot 2024-10-10 114436](https://github.com/user-attachments/assets/673bd3db-e31d-4422-ba92-45c969266f4b)
-![image](https://github.com/user-attachments/assets/cd874727-9fde-4680-84c1-43631f6eab97)
-![image](https://github.com/user-attachments/assets/b7837e06-de30-4a0c-bebc-d1b569bba7cf)
-![image](https://github.com/user-attachments/assets/5ed3a6fd-93c8-4242-a54f-5cab4cef386e)
-![image](https://github.com/user-attachments/assets/3640d049-2b02-4995-a207-a64df3e4c35e)
-![image](https://github.com/user-attachments/assets/505470ea-299e-47fe-85f7-8a39ccf862c1)
-![image](https://github.com/user-attachments/assets/9b13d73d-b61b-46ab-92dc-783badda14ce)
-![Screenshot 2024-10-10 113231](https://github.com/user-attachments/assets/a8cb9184-d2ee-4c9f-b32a-830b83475ed4)
+ ![image](https://github.com/user-attachments/assets/fb04746d-a39b-4311-8767-18da4027f019)
 
  
  ## CIRCUIT DIAGRAM (EXPORT THE GRAPHICS TO PDF AND ADD THE SCREEN SHOT HERE): 
-
- ![Screenshot 2024-10-10 113509](https://github.com/user-attachments/assets/c7ff9ef3-bfd2-4f66-bab5-10181477ee14)
+![image](https://github.com/user-attachments/assets/22eab0fb-420a-4f67-a124-108202a09766)
 
 ## Result :
 Interfacing a 4x4 keypad with ARM microcontroller are simulated in proteus and the results are verified.
